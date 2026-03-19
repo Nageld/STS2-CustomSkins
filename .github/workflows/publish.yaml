@@ -1,0 +1,31 @@
+name: Publish
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Publish
+        run: >
+          dotnet publish MPSkins.csproj -c Release
+          /p:Sts2DataDir="$STS2_DATA_DIR"
+          /p:GodotPath="$GODOT_PATH"
+          /p:ModsPath="${{ github.workspace }}/output/mods/"
+
+      - name: Package and release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(jq -r '.version' MPSkins.json)
+          cd output/mods && zip -r ../MPSkins.zip MPSkins
+          gh release create "$version" ../AscensionTracker.zip \
+            --title "$version" \
+            --generate-notes
