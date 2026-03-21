@@ -8,11 +8,12 @@ namespace MPSkins;
 public struct SkinChangedMessage : INetMessage, IPacketSerializable
 {
     public string skinName;
+    public ulong playerId;
 
     public bool ShouldBroadcast => true;
     public NetTransferMode Mode => NetTransferMode.Reliable;
     public LogLevel LogLevel => LogLevel.Info;
 
-    public void Serialize(PacketWriter writer) => writer.WriteString(skinName);
-    public void Deserialize(PacketReader reader) => skinName = reader.ReadString();
+    public void Serialize(PacketWriter writer) { writer.WriteString(skinName); writer.WriteULong(playerId); }
+    public void Deserialize(PacketReader reader) { skinName = reader.ReadString(); playerId = reader.ReadULong(); }
 }

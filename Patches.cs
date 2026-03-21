@@ -1,6 +1,6 @@
-using System.Collections.Generic;
 using Godot;
 using HarmonyLib;
+using MegaCrit.Sts2.Core.Context;
 using MegaCrit.Sts2.Core.Entities.Multiplayer;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Multiplayer.Game;
@@ -10,6 +10,7 @@ using MegaCrit.Sts2.Core.Nodes.Screens.CharacterSelect;
 using MegaCrit.Sts2.Core.Nodes.Screens.CustomRun;
 using MegaCrit.Sts2.Core.Nodes.Screens.Map;
 using MegaCrit.Sts2.Core.Runs;
+using MegaCrit.Sts2.Core.Saves;
 
 namespace MPSkins;
 
@@ -40,11 +41,7 @@ void fragment() { COLOR = texture(skin_texture, UV) * modulate_color; }
     {
         SkinManager.Reset();
 
-        var vbox = BuildSkinPickerVbox(dir =>
-        {
-            var selectedBtn = __instance._selectedButton;
-            CycleSkin(__instance, dir, selectedBtn);
-        });
+        var vbox = BuildSkinPickerVbox(dir => CycleSkin(__instance, dir));
         vbox.SetAnchorsPreset(Control.LayoutPreset.BottomRight);
         vbox.OffsetLeft = -310f;
         vbox.OffsetTop = -450f;
@@ -61,7 +58,7 @@ void fragment() { COLOR = texture(skin_texture, UV) * modulate_color; }
         var charId = __instance._lobby?.LocalPlayer.character?.Id.Entry;
         if (charId != null) SkinManager.CurrentCharacterId = charId;
 
-        var vbox = BuildSkinPickerVbox(dir => CycleSkin(__instance, dir, null));
+        var vbox = BuildSkinPickerVbox(dir => CycleSkin(__instance, dir));
         vbox.SetAnchorsPreset(Control.LayoutPreset.BottomLeft);
         vbox.OffsetLeft = 150f;
         vbox.OffsetRight = 400f;
@@ -75,21 +72,22 @@ void fragment() { COLOR = texture(skin_texture, UV) * modulate_color; }
     [HarmonyPostfix]
     static void CustomRunSelectCharacter(NCustomRunScreen __instance, CharacterModel characterModel)
     {
-        string characterId = characterModel.Id.Entry;
-        SkinManager.CurrentCharacterId = characterId;
+        HandleCharacterChanged(__instance, characterModel.Id.Entry);
+    }
 
-        var available = SkinManager.GetAvailableSkins(characterId);
-        if (!available.Contains(SkinManager.LocalSkinName))
-            SkinManager.LocalSkinName = "Default";
-
-        RefreshPickerLabel(__instance);
+    [HarmonyPatch(typeof(NMapScreen), "Initialize")]
+    [HarmonyPostfix]
+    static void MapScreenInitialize(RunState runState)
+    {
+        SkinManager.CurrentCharacterId = LocalContext.GetMe(runState).Character.Id.Entry;
+        BroadcastLocalSkin();
     }
 
     [HarmonyPatch(typeof(NMapScreen), "_Ready")]
     [HarmonyPostfix]
     static void MapScreenReady(NMapScreen __instance)
     {
-        var vbox = BuildSkinPickerVbox(dir => CycleSkin(__instance, dir, null));
+        var vbox = BuildSkinPickerVbox(dir => CycleSkin(__instance, dir));
         vbox.SetAnchorsPreset(Control.LayoutPreset.BottomRight);
         vbox.OffsetLeft = -310f;
         vbox.OffsetRight = -40f;
@@ -103,15 +101,7 @@ void fragment() { COLOR = texture(skin_texture, UV) * modulate_color; }
     [HarmonyPostfix]
     static void CharSelectOpened(NCharacterSelectScreen __instance)
     {
-        ulong localId = SkinManager.LocalPlayerId;
-        if (localId != 0)
-        {
-            string broadcastSkin = SkinManager.LocalSkinName == "Random" ? "Default" : SkinManager.LocalSkinName;
-            SkinManager.SetPlayerSkinName(localId, broadcastSkin);
-            SkinManager.NetService?.SendMessage(
-                new SkinChangedMessage { skinName = broadcastSkin });
-        }
-
+        BroadcastLocalSkin();
         RefreshPickerLabel(__instance);
     }
 
@@ -119,31 +109,15 @@ void fragment() { COLOR = texture(skin_texture, UV) * modulate_color; }
     [HarmonyPostfix]
     static void OnSelectCharacter(NCharacterSelectScreen __instance, CharacterModel characterModel)
     {
-        string characterId = characterModel.Id.Entry;
-        SkinManager.CurrentCharacterId = characterId;
-
-        // If the current skin is a texture skin for a different character, reset to Default.
-        var available = SkinManager.GetAvailableSkins(characterId);
-        if (!available.Contains(SkinManager.LocalSkinName))
-            SkinManager.LocalSkinName = "Default";
-
-        RefreshPickerLabel(__instance);
-
-        // Stubbed.
-        if (__instance._selectedButton != null)
-            ApplyHueToButton(__instance._selectedButton, SkinManager.LocalSkinName);
+        HandleCharacterChanged(__instance, characterModel.Id.Entry);
     }
 
     [HarmonyPatch(typeof(NCharacterSelectScreen), "PlayerConnected")]
     [HarmonyPostfix]
     static void OnPlayerConnected(LobbyPlayer player)
     {
-        if (SkinManager.NetService == null) return;
         if (player.id == SkinManager.LocalPlayerId) return;
-
-        string broadcastSkin = SkinManager.LocalSkinName == "Random" ? "Default" : SkinManager.LocalSkinName;
-        SkinManager.NetService.SendMessage(
-            new SkinChangedMessage { skinName = broadcastSkin });
+        BroadcastLocalSkin();
     }
 
     [HarmonyPatch(typeof(StartRunLobby), MethodType.Constructor,
@@ -151,19 +125,32 @@ void fragment() { COLOR = texture(skin_texture, UV) * modulate_color; }
     [HarmonyPostfix]
     static void LobbyConstructed(StartRunLobby __instance)
     {
-        if (SkinManager.NetService != null && SkinManager.NetService != __instance.NetService)
+        SetupNetService(__instance.NetService, __instance);
+    }
+
+    [HarmonyPatch(typeof(LoadRunLobby), MethodType.Constructor,
+        new[] { typeof(INetGameService), typeof(ILoadRunLobbyListener), typeof(SerializableRun) })]
+    [HarmonyPostfix]
+    static void LoadRunLobbyConstructed(LoadRunLobby __instance)
+    {
+        SetupNetService(__instance.NetService, __instance);
+    }
+
+    static void SetupNetService(INetGameService netService, object lobby)
+    {
+        if (SkinManager.NetService != null && SkinManager.NetService != netService)
             SkinManager.NetService.UnregisterMessageHandler<SkinChangedMessage>(HandleSkinChanged);
 
-        SkinManager.CurrentLobby = __instance;
-        SkinManager.NetService = __instance.NetService;
-        SkinManager.LocalPlayerId = __instance.NetService.NetId;
+        SkinManager.CurrentLobby = lobby;
+        SkinManager.NetService = netService;
+        SkinManager.LocalPlayerId = netService.NetId;
         SkinManager.Reset();
-        __instance.NetService.RegisterMessageHandler<SkinChangedMessage>(HandleSkinChanged);
+        netService.RegisterMessageHandler<SkinChangedMessage>(HandleSkinChanged);
     }
 
     static void HandleSkinChanged(SkinChangedMessage message, ulong senderId)
     {
-        SkinManager.SetPlayerSkinName(senderId, message.skinName);
+        SkinManager.SetPlayerSkinName(message.playerId, message.skinName);
     }
 
     [HarmonyPatch(typeof(StartRunLobby), "CleanUp")]
@@ -174,11 +161,12 @@ void fragment() { COLOR = texture(skin_texture, UV) * modulate_color; }
             SkinManager.CurrentLobby = null;
     }
 
-    [HarmonyPatch(typeof(NCharacterSelectButton), "Select")]
-    [HarmonyPostfix]
-    static void ButtonSelected(NCharacterSelectButton __instance)
+    [HarmonyPatch(typeof(LoadRunLobby), "CleanUp")]
+    [HarmonyPrefix]
+    static void LoadRunLobbyCleanUp(LoadRunLobby __instance)
     {
-        ApplyHueToButton(__instance, SkinManager.LocalSkinName);
+        if (SkinManager.CurrentLobby == __instance)
+            SkinManager.CurrentLobby = null;
     }
 
     [HarmonyPatch(typeof(NCharacterSelectButton), "Deselect")]
@@ -200,11 +188,9 @@ void fragment() { COLOR = texture(skin_texture, UV) * modulate_color; }
         var delegateRef = __instance._delegate;
         if (delegateRef == null || delegateRef.Lobby.NetService.Type == NetGameType.Singleplayer) return;
 
-        bool isSelected = __instance._isSelected;
-
         int iconIndex = 0;
 
-        if (isSelected && iconIndex < playerIconContainer.GetChildCount())
+        if (__instance._isSelected && iconIndex < playerIconContainer.GetChildCount())
         {
             playerIconContainer.GetChild<Control>(iconIndex).Modulate =
                 SkinManager.GetSkinColor(SkinManager.LocalSkinName);
@@ -229,7 +215,7 @@ void fragment() { COLOR = texture(skin_texture, UV) * modulate_color; }
 
         ulong netId = __instance.Entity.Player.NetId;
         ulong localId = SkinManager.LocalPlayerId;
-        bool isLocal = localId == 0 || netId == localId;
+        bool isLocal = netId == localId;
         string characterId = __instance.Entity.Player.Character.Id.Entry;
         if (isLocal)
         {
@@ -252,7 +238,26 @@ void fragment() { COLOR = texture(skin_texture, UV) * modulate_color; }
         }
     }
 
-    static void CycleSkin(Node labelParent, int direction, NCharacterSelectButton? selectedBtn)
+    static void BroadcastLocalSkin()
+    {
+        ulong localId = SkinManager.LocalPlayerId;
+        if (localId == 0) return;
+
+        string skinName = SkinManager.BroadcastSkinName;
+        SkinManager.SetPlayerSkinName(localId, skinName);
+        SkinManager.NetService?.SendMessage(
+            new SkinChangedMessage { skinName = skinName, playerId = localId });
+    }
+
+    static void HandleCharacterChanged(Node labelParent, string characterId)
+    {
+        SkinManager.CurrentCharacterId = characterId;
+        if (!SkinManager.GetAvailableSkins(characterId).Contains(SkinManager.LocalSkinName))
+            SkinManager.LocalSkinName = "Default";
+        RefreshPickerLabel(labelParent);
+    }
+
+    static void CycleSkin(Node labelParent, int direction)
     {
         string characterId = SkinManager.CurrentCharacterId ?? "";
         var available = SkinManager.GetAvailableSkins(characterId);
@@ -263,18 +268,7 @@ void fragment() { COLOR = texture(skin_texture, UV) * modulate_color; }
         SkinManager.LocalSkinName = available[newIdx];
 
         RefreshPickerLabel(labelParent);
-
-        if (selectedBtn != null)
-            ApplyHueToButton(selectedBtn, SkinManager.LocalSkinName);
-
-        // "Random" is resolved at run start; broadcast Default as a placeholder until then.
-        string broadcastSkin = SkinManager.LocalSkinName == "Random" ? "Default" : SkinManager.LocalSkinName;
-        ulong localId = SkinManager.LocalPlayerId;
-        if (localId != 0)
-            SkinManager.SetPlayerSkinName(localId, broadcastSkin);
-
-        SkinManager.NetService?.SendMessage(
-            new SkinChangedMessage { skinName = broadcastSkin });
+        BroadcastLocalSkin();
     }
 
     static void RefreshPickerLabel(Node parent)
@@ -333,13 +327,6 @@ void fragment() { COLOR = texture(skin_texture, UV) * modulate_color; }
         vbox.AddChild(hbox);
 
         return vbox;
-    }
-
-    static void ApplyHueToButton(NCharacterSelectButton button, string skinName)
-    {
-        // Unsure if I want to keep this
-        // if (!SkinManager.IsTintSkin(skinName)) return;
-        // button._hsv?.SetShaderParameter(_hParam, SkinManager.GetHueForSkin(skinName));
     }
 
     static void ApplyTextureSkin(MegaCrit.Sts2.Core.Bindings.MegaSpine.MegaSprite spineBody, Texture2D texture)

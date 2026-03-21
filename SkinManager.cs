@@ -26,7 +26,7 @@ public static class SkinManager
     private static readonly Dictionary<ulong, string> _playerSkinNames = new();
     private static string _resolvedSkinName = "Default";
 
-    public static StartRunLobby? CurrentLobby { get; set; }
+    public static object? CurrentLobby { get; set; }
     public static INetGameService? NetService { get; set; }
     public static ulong LocalPlayerId { get; set; }
 
@@ -35,6 +35,9 @@ public static class SkinManager
     public static string LocalSkinName { get; set; } = "Default";
 
     public static string ResolvedSkinName => _resolvedSkinName;
+
+    public static string BroadcastSkinName =>
+        LocalSkinName == "Random" ? "Default" : LocalSkinName;
 
     public static void ResolveLocalSkin(string? characterId)
     {
