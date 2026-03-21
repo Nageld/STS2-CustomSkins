@@ -26,6 +26,6 @@ jobs:
         run: |
           version=$(jq -r '.version' MPSkins.json)
           cd output/mods && zip -r ../MPSkins.zip MPSkins
-          gh release create "$version" ../AscensionTracker.zip \
+          gh release create "$version" ../MPSkins.zip \
             --title "$version" \
             --generate-notes
