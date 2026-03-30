@@ -48,17 +48,37 @@ public static partial class Patches
             swatch.Color = SkinManager.GetSkinColor(SkinManager.LocalSkinName);
     }
 
+    static Font? _gameFont;
+    static Font GetGameFont()
+    {
+        _gameFont ??= ResourceLoader.Load<Font>("res://themes/kreon_bold_shared.tres",
+            null, ResourceLoader.CacheMode.Reuse);
+        return _gameFont;
+    }
+
+    static void ApplyLabelStyle(Label label, int fontSize)
+    {
+        var font = GetGameFont();
+        if (font != null) label.AddThemeFontOverride("font", font);
+        label.AddThemeFontSizeOverride("font_size", fontSize);
+        label.AddThemeConstantOverride("outline_size", 8);
+        label.AddThemeColorOverride("font_outline_color", new Color(0, 0, 0, 0.4f));
+    }
+
     static VBoxContainer BuildSkinPickerVbox(Action<int> onCycle)
     {
+        var font = GetGameFont();
+
         var titleLabel = new Label();
         titleLabel.Text = "Skin";
         titleLabel.HorizontalAlignment = HorizontalAlignment.Center;
-        titleLabel.AddThemeFontSizeOverride("font_size", 20);
+        ApplyLabelStyle(titleLabel, 20);
 
         var leftBtn = new Godot.Button();
         leftBtn.Text = "◄";
         leftBtn.CustomMinimumSize = new Vector2(44, 44);
         leftBtn.AddThemeFontSizeOverride("font_size", 20);
+        if (font != null) leftBtn.AddThemeFontOverride("font", font);
         leftBtn.Pressed += () => onCycle(-1);
 
         var skinLabel = new Label();
@@ -67,7 +87,7 @@ public static partial class Patches
         skinLabel.CustomMinimumSize = new Vector2(110, 0);
         skinLabel.HorizontalAlignment = HorizontalAlignment.Center;
         skinLabel.VerticalAlignment = VerticalAlignment.Center;
-        skinLabel.AddThemeFontSizeOverride("font_size", 18);
+        ApplyLabelStyle(skinLabel, 18);
 
         var swatch = new ColorRect();
         swatch.Name = "MPSkins_Swatch";
@@ -78,6 +98,7 @@ public static partial class Patches
         rightBtn.Text = "►";
         rightBtn.CustomMinimumSize = new Vector2(44, 44);
         rightBtn.AddThemeFontSizeOverride("font_size", 20);
+        if (font != null) rightBtn.AddThemeFontOverride("font", font);
         rightBtn.Pressed += () => onCycle(1);
 
         var hbox = new HBoxContainer();
