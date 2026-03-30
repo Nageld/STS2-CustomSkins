@@ -18,6 +18,7 @@ public static partial class Patches
 
     static NCreatureVisuals? _previewVisuals;
     static Node2D? _previewContainer;
+    static NinePatchRect? _previewBacking;
     static CharacterModel? _previewCharModel;
 
     static void RefreshPreview()
@@ -29,12 +30,24 @@ public static partial class Patches
         }
 
         if (_previewContainer == null || !GodotObject.IsInstanceValid(_previewContainer)) return;
-        if (_previewCharModel == null) return;
+        if (_previewCharModel == null)
+        {
+            if (_previewBacking != null) _previewBacking.Visible = false;
+            return;
+        }
 
         _previewVisuals = _previewCharModel.CreateVisuals();
         _previewContainer.AddChild(_previewVisuals);
 
         _previewVisuals.Position = new Vector2(500f, _previewVisuals.Bounds.Size.Y * 0.5f);
+
+        if (_previewBacking != null)
+        {
+            float h = _previewVisuals.Bounds.Size.Y;
+            _previewBacking.Position = new Vector2(300f, -h * 0.5f - 30f);
+            _previewBacking.Size = new Vector2(400f, h + 80f);
+            _previewBacking.Visible = true;
+        }
 
         if (_previewVisuals.HasSpineAnimation && _previewVisuals.SpineBody != null)
             _previewVisuals.SpineBody.GetAnimationState().SetAnimation("idle_loop");
@@ -64,6 +77,7 @@ public static partial class Patches
         SkinManager.Reset();
         _previewCharModel = null;
         _previewVisuals = null;
+        _previewBacking = null;
 
         _previewContainer = new Node2D();
         _previewContainer.Name = "MPSkins_Preview";
@@ -71,6 +85,16 @@ public static partial class Patches
         __instance.AddChild(_previewContainer);
         var bgNode = __instance.GetNode("AnimatedBg");
         __instance.MoveChild(_previewContainer, bgNode.GetIndex() + 1);
+
+        _previewBacking = new NinePatchRect();
+        _previewBacking.Texture = ResourceLoader.Load<Texture2D>("res://images/ui/fuzzy_nine_patch_char_select.png");
+        _previewBacking.PatchMarginLeft = 42;
+        _previewBacking.PatchMarginTop = 42;
+        _previewBacking.PatchMarginRight = 42;
+        _previewBacking.PatchMarginBottom = 42;
+        _previewBacking.Modulate = new Color(0, 0, 0, 0.36f);
+        _previewBacking.Visible = false;
+        _previewContainer.AddChild(_previewBacking);
 
         var vbox = BuildSkinPickerVbox(dir => CycleSkin(__instance, dir));
         vbox.SetAnchorsPreset(Control.LayoutPreset.BottomRight);
