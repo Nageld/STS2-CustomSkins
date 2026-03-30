@@ -1,5 +1,6 @@
 using Godot;
 using HarmonyLib;
+using MegaCrit.Sts2.Core.Bindings.MegaSpine;
 using MegaCrit.Sts2.Core.Nodes.Combat;
 
 namespace MPSkins;
@@ -7,13 +8,14 @@ namespace MPSkins;
 public static partial class Patches
 {
     static Shader? _skinShader;
-    static Shader GetSkinShader()
+    static Shader GetSkinShader() => _skinShader ??= MakeSkinShader();
+
+    static Shader MakeSkinShader()
     {
-        if (_skinShader != null) return _skinShader;
         _skinShader = new Shader();
         _skinShader.Code = @"
 shader_type canvas_item;
-uniform sampler2D skin_texture : hint_default_transparent;
+uniform sampler2D skin_texture;
 varying vec4 modulate_color;
 void vertex() { modulate_color = COLOR; }
 void fragment() { COLOR = texture(skin_texture, UV) * modulate_color; }
@@ -53,11 +55,19 @@ void fragment() { COLOR = texture(skin_texture, UV) * modulate_color; }
         }
     }
 
-    static void ApplyTextureSkin(MegaCrit.Sts2.Core.Bindings.MegaSpine.MegaSprite spineBody, Texture2D texture)
+    static void ApplyTextureSkin(MegaSprite spineBody, Texture2D texture)
     {
+        var shader = GetSkinShader();
         var mat = new ShaderMaterial();
-        mat.Shader = GetSkinShader();
+        mat.Shader = shader;
         mat.SetShaderParameter("skin_texture", texture);
         spineBody.SetNormalMaterial(mat);
+
+        // TODO UNDERSTAND HOW DOES THIS KIND OF FIX IT???
+        // Tried using an llm to solve the shader issue it added this
+        var addMat = new ShaderMaterial();
+        addMat.Shader = shader;
+        addMat.SetShaderParameter("skin_texture", texture);
+        spineBody.BoundObject.Call("set_additive_material", addMat);
     }
 }

@@ -103,7 +103,7 @@
         </ItemGroup>
         <Copy SourceFiles="@(BaseLibFiles)" DestinationFolder="$(ModsPath)BaseLib/"/>
         <Message Text="Copying skin files to mods folder." Importance="high"/>
-        <Copy SourceFiles="@(SkinFiles)" DestinationFolder="$(ModsPath)$(MSBuildProjectName)/%(SkinFiles.RecursiveDir)"/>
+        <Copy SourceFiles="@(SkinFiles)" DestinationFolder="$(ModsPath)$(MSBuildProjectName)/skins/%(SkinFiles.RecursiveDir)"/>
     </Target>
 
     <Target Name="GodotPublish" AfterTargets="Publish" Condition="'$(GodotPath)' != '' and Exists('$(GodotPath)') and '$(IsInnerGodotExport)' != 'true'">

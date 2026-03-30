@@ -1,8 +1,7 @@
-using System.Collections.Generic;
-using System.IO;
+using System.Collections.Concurrent;
 using Godot;
 using MegaCrit.Sts2.Core.Multiplayer.Game;
-using MegaCrit.Sts2.Core.Multiplayer.Game.Lobby;
+using Timer = System.Threading.Timer;
 
 namespace MPSkins;
 
@@ -22,6 +21,11 @@ public static class SkinManager
     private static readonly Dictionary<string, List<string>> _charTextureSkins = new();
     private static readonly Dictionary<(string charId, string name), string> _skinFilePaths = new();
     private static readonly Dictionary<(string charId, string name), Texture2D> _textureCache = new();
+
+    private static string? _skinsRoot;
+    private static FileSystemWatcher? _watcher;
+    private static Timer? _debounceTimer;
+    private static readonly ConcurrentDictionary<string, byte> _pendingReloads = new();
 
     private static readonly Dictionary<ulong, string> _playerSkinNames = new();
     private static string _resolvedSkinName = "Default";
@@ -53,11 +57,11 @@ public static class SkinManager
     }
 
     /// <summary>Scan {modDir}/skins/{characterId}/*.png and register all found skins.</summary>
-    // TODO: Add support for FileSystemWatcher to detect new skins added while the game is running.
     public static void LoadSkinsFromFolder(string modDir)
     {
-        string skinsRoot = Path.Combine(modDir, "skins");
-        if (!Directory.Exists(skinsRoot)) return;
+        _skinsRoot = Path.Combine(modDir, "skins");
+        if (!Directory.Exists(_skinsRoot)) return;
+        string skinsRoot = _skinsRoot;
 
         foreach (string charDir in Directory.GetDirectories(skinsRoot))
         {
@@ -124,6 +128,88 @@ public static class SkinManager
         var texture = ImageTexture.CreateFromImage(image);
         _textureCache[key] = texture;
         return texture;
+    }
+
+    /// <summary>
+    /// Watches the skins folder for PNG changes.
+    /// </summary>
+    public static void StartFileWatcher()
+    {
+        if (_skinsRoot == null || !Directory.Exists(_skinsRoot)) return;
+
+        _debounceTimer = new Timer(_ =>
+        {
+            var paths = new List<string>(_pendingReloads.Keys);
+            _pendingReloads.Clear();
+            Callable.From(() =>
+            {
+                foreach (string path in paths)
+                {
+                    try { ProcessSkinFileChange(path); }
+                    catch {  }
+                }
+            }).CallDeferred();
+        }, null, Timeout.Infinite, Timeout.Infinite);
+
+        _watcher = new FileSystemWatcher(_skinsRoot, "*.png")
+        {
+            IncludeSubdirectories = true,
+            NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.CreationTime
+        };
+        _watcher.Changed += (_, e) => QueueReload(e.FullPath);
+        _watcher.Created += (_, e) => QueueReload(e.FullPath);
+        _watcher.Deleted += (_, e) => QueueReload(e.FullPath);
+        _watcher.Renamed += (_, e) => { QueueReload(e.OldFullPath); QueueReload(e.FullPath); };
+        _watcher.EnableRaisingEvents = true;
+    }
+
+    private static void QueueReload(string fullPath)
+    {
+        _pendingReloads[fullPath] = 0;
+        _debounceTimer?.Change(200, Timeout.Infinite);
+    }
+
+    private static void ProcessSkinFileChange(string fullPath)
+    {
+        if (_skinsRoot == null) return;
+
+        string relative = Path.GetRelativePath(_skinsRoot, fullPath);
+        string[] parts = relative.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        if (parts.Length != 2) return;
+
+        string charId = parts[0].ToLower();
+        string skinName = Path.GetFileNameWithoutExtension(parts[1]);
+        var key = (charId, skinName);
+
+        if (!File.Exists(fullPath))
+        {
+            // Deleted
+            _skinFilePaths.Remove(key);
+            if (_charTextureSkins.TryGetValue(charId, out var names))
+                names.Remove(skinName);
+            return;
+        }
+
+        var image = Image.LoadFromFile(fullPath);
+        if (image == null) return;
+
+        if (_textureCache.TryGetValue(key, out var existing) && existing is ImageTexture imgTex)
+        {
+            imgTex.SetImage(image);
+        }
+        else
+        {
+            _skinFilePaths[key] = fullPath;
+            if (!_charTextureSkins.TryGetValue(charId, out var names))
+            {
+                names = new List<string>();
+                _charTextureSkins[charId] = names;
+            }
+            if (!names.Contains(skinName))
+                names.Add(skinName);
+
+            _textureCache[key] = ImageTexture.CreateFromImage(image);
+        }
     }
 
     public static void SetPlayerSkinName(ulong playerId, string skinName) =>
