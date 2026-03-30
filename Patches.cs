@@ -37,6 +37,7 @@ public static partial class Patches
 
         RefreshPickerLabel(labelParent);
         BroadcastLocalSkin();
+        RefreshPreview();
     }
 
     static void RefreshPickerLabel(Node parent)
