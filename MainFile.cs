@@ -1,4 +1,3 @@
-using System.IO;
 using System.Reflection;
 using Godot;
 using HarmonyLib;
@@ -21,5 +20,6 @@ public partial class MainFile : Node
 
         string modDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!;
         SkinManager.LoadSkinsFromFolder(modDir);
+        SkinManager.StartFileWatcher();
     }
 }
