@@ -20,6 +20,7 @@ public static partial class Patches
     static Node2D? _previewContainer;
     static NinePatchRect? _previewBacking;
     static CharacterModel? _previewCharModel;
+    static string? _previewSkinOverride;
 
     static void RefreshPreview()
     {
@@ -52,7 +53,7 @@ public static partial class Patches
         if (_previewVisuals.HasSpineAnimation && _previewVisuals.SpineBody != null)
             _previewVisuals.SpineBody.GetAnimationState().SetAnimation("idle_loop");
 
-        string skinName = SkinManager.LocalSkinName;
+        string skinName = _previewSkinOverride ?? SkinManager.LocalSkinName;
         if (skinName == "Random" || _previewVisuals.SpineBody == null) return;
 
         if (SkinManager.IsTintSkin(skinName))
@@ -96,7 +97,7 @@ public static partial class Patches
         _previewBacking.Visible = false;
         _previewContainer.AddChild(_previewBacking);
 
-        var vbox = BuildSkinPickerVbox(dir => CycleSkin(__instance, dir));
+        var vbox = BuildSkinPickerVbox(name => SelectSkin(__instance, name));
         vbox.SetAnchorsPreset(Control.LayoutPreset.BottomRight);
         vbox.OffsetLeft = -310f;
         vbox.OffsetTop = -450f;
@@ -113,7 +114,7 @@ public static partial class Patches
         var charId = __instance._lobby?.LocalPlayer.character?.Id.Entry;
         if (charId != null) SkinManager.CurrentCharacterId = charId;
 
-        var vbox = BuildSkinPickerVbox(dir => CycleSkin(__instance, dir));
+        var vbox = BuildSkinPickerVbox(name => SelectSkin(__instance, name));
         vbox.SetAnchorsPreset(Control.LayoutPreset.BottomLeft);
         vbox.OffsetLeft = 150f;
         vbox.OffsetRight = 400f;
@@ -142,7 +143,7 @@ public static partial class Patches
     [HarmonyPostfix]
     static void MapScreenReady(NMapScreen __instance)
     {
-        var vbox = BuildSkinPickerVbox(dir => CycleSkin(__instance, dir));
+        var vbox = BuildSkinPickerVbox(name => SelectSkin(__instance, name), false);
         vbox.SetAnchorsPreset(Control.LayoutPreset.BottomRight);
         vbox.OffsetLeft = -310f;
         vbox.OffsetRight = -40f;
@@ -157,7 +158,7 @@ public static partial class Patches
     static void CharSelectOpened(NCharacterSelectScreen __instance)
     {
         BroadcastLocalSkin();
-        RefreshPickerLabel(__instance);
+        RefreshDropdown(__instance);
         RefreshPreview();
     }
 
