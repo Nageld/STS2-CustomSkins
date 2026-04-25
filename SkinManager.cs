@@ -88,16 +88,17 @@ public static class SkinManager
     /// <summary>All skin names available for a given character.</summary>
     public static List<string> GetAvailableSkins(string? characterId)
     {
-        var list = new List<string>(TintSkins.Length);
-        foreach (var (name, _) in TintSkins)
-            list.Add(name);
+        var list = new List<string>();
+        list.Add(TintSkins[0].Name);
+        list.Add("Random");
 
         string? charIdLower = characterId?.ToLower();
         _charTextureSkins.TryGetValue(charIdLower ?? "", out var texNames);
         if (texNames != null)
             list.AddRange(texNames);
 
-        list.Add("Random");
+        foreach (var (name, _) in TintSkins[1..])
+            list.Add(name);
         return list;
     }
 
