@@ -136,6 +136,8 @@ public static partial class Patches
     static void MapScreenInitialize(RunState runState)
     {
         SkinManager.CurrentCharacterId = LocalContext.GetMe(runState).Character.Id.Entry;
+        if (LocalContext.NetId.HasValue)
+            SkinManager.LocalPlayerId = LocalContext.NetId.Value;
         BroadcastLocalSkin();
     }
 
