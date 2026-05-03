@@ -27,16 +27,16 @@ public static partial class Patches
     static void SetupNetService(INetGameService netService, object lobby)
     {
         if (SkinManager.NetService != null && SkinManager.NetService != netService)
-            SkinManager.NetService.UnregisterMessageHandler<SkinChangedMessage>(HandleSkinChanged);
+            SkinManager.NetService.UnregisterMessageHandler<ZZ_SkinChangedMessage>(HandleSkinChanged);
 
         SkinManager.CurrentLobby = lobby;
         SkinManager.NetService = netService;
         SkinManager.LocalPlayerId = netService.NetId;
         SkinManager.Reset();
-        netService.RegisterMessageHandler<SkinChangedMessage>(HandleSkinChanged);
+        netService.RegisterMessageHandler<ZZ_SkinChangedMessage>(HandleSkinChanged);
     }
 
-    static void HandleSkinChanged(SkinChangedMessage message, ulong senderId)
+    static void HandleSkinChanged(ZZ_SkinChangedMessage message, ulong senderId)
     {
         SkinManager.SetPlayerSkinName(message.playerId, message.skinName);
     }

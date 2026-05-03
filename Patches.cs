@@ -25,7 +25,7 @@ public static partial class Patches
         string skinName = SkinManager.BroadcastSkinName;
         SkinManager.SetPlayerSkinName(localId, skinName);
         SkinManager.NetService?.SendMessage(
-            new SkinChangedMessage { skinName = skinName, playerId = localId });
+            new ZZ_SkinChangedMessage { skinName = skinName, playerId = localId });
     }
 
     static void SelectSkin(Node parent, string skinName)

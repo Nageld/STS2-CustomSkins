@@ -5,7 +5,7 @@ using MegaCrit.Sts2.Core.Multiplayer.Transport;
 namespace MPSkins;
 
 /// <summary>Sent when a player changes their skin selection.</summary>
-public struct SkinChangedMessage : INetMessage, IPacketSerializable
+public struct ZZ_SkinChangedMessage : INetMessage, IPacketSerializable
 {
     public string skinName;
     public ulong playerId;

@@ -3,9 +3,9 @@
   "name": "MPSkins",
   "author": "Book",
   "description": "Adds support for player skins in multiplayer.",
-  "version": "v0.0.8",
+  "version": "v0.0.9",
   "has_pck": false,
   "has_dll": true,
   "dependencies": [],
-  "affects_gameplay": true
+  "affects_gameplay": false
 }
